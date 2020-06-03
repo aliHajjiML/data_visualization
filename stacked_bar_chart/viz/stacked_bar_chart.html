@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+
+<!-- Load d3.js -->
+<script src="https://d3js.org/d3.v4.js"></script>
+
+<!-- Create a div where the graph will take place -->
+<h2> Stacked Bar Chart of cumulative share of different categories for USA </h2>
+
+
+<style type='text/css'>
+  .my-legend .legend-title {
+    text-align: left;
+    margin-bottom: 5px;
+    font-weight: bold;
+    font-size: 90%;
+    }
+  .my-legend .legend-scale ul {
+    margin: 0;
+    margin-bottom: 5px;
+    padding: 0;
+    float: left;
+    list-style: none;
+    }
+  .my-legend .legend-scale ul li {
+    font-size: 80%;
+    list-style: none;
+    margin-left: 0;
+    line-height: 18px;
+    margin-bottom: 2px;
+    }
+  .my-legend ul.legend-labels li span {
+    display: block;
+    float: left;
+    height: 16px;
+    width: 30px;
+    margin-right: 5px;
+    margin-left: 0;
+    border: 1px solid #999;
+    }
+  .my-legend .legend-source {
+    font-size: 70%;
+    color: #999;
+    clear: both;
+    }
+  .my-legend a {
+    color: #777;
+    }
+</style>
+
+<div id="my_dataviz" style='float:left'></div>
+<div class='my-legend'>
+<div class='legend-title'>Percentage of Population</div>
+<div class='legend-scale'>
+  <ul class='legend-labels'>
+    <li><span style='background:#8693C0;'></span>0%-50% </li>
+    <li><span style='background:#858482;'></span>50%-75% </li>
+    <li><span style='background:#04336B;'></span>75%-99% </li>
+    <li><span style='background:#4E4C4D;'></span>99%-100% </li>
+  </ul>
+</div>
+</div>
+
+<script>
+
+
+
+
+
+// set the dimensions and margins of the graph
+var margin = {top: 10, right: 10, bottom: 20, left: 50},
+    width = 560 - margin.left - margin.right,
+    height = 400 - margin.top - margin.bottom;
+
+
+
+// append the svg object to the body of the page
+var svg = d3.select("#my_dataviz")
+  .append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform",
+          "translate(" + margin.left + "," + margin.top + ")");
+
+
+
+
+// Parse the Data
+d3.tsv("../data/income/US.tsv", function(data) {
+
+
+
+
+ //filter the data on year and the high and pick up just some rows
+
+data = data
+    .filter(d => (+d.high == '0.50000' || +d.high == '0.75000' || +d.high == '0.99000' || +d.high == '1.00000') && (d.year ==1983 || d.year ==1990 || d.year ==1997 || d.year ==2003 || d.year ==2010 || d.year ==2014  ));
+console.log(data);
+
+// filter on year and share
+
+var data1= data.map(d=>{
+
+  var info={'year':d.year,'share':d.cumul};
+  return info;
+});
+
+//aggregate data(share) by year 
+
+var expensesByYear = d3.nest()
+  .key(function(d) { return d.year; })
+  .entries(data1);
+
+
+var data2= expensesByYear.map(d=>{
+
+  var info={'year':d.key,'share1':d.values[0].share,'share2':d.values[1].share-d.values[0].share,'share3':d.values[2].share-d.values[1].share,'share4':d.values[3].share-d.values[2].share};
+  return info;
+});
+
+// List of subgroups = header of the csv files = soil condition here
+
+var subgroups1=['share1','share2','share3','share4'];
+console.log(subgroups1);
+
+
+
+  // List of groups = species here = value of the first column called group -> I show them on the X axis
+var groups = d3.map(data2, function(d){return(d.year)}).keys().sort();
+console.log(groups);
+  //alert(groups)
+  // Add X axis
+  var x = d3.scaleBand()
+      .domain(groups)
+      .range([0, width])
+      .padding([0.2])
+  svg.append("g")
+    .attr("transform", "translate(0," + height + ")")
+    .call(d3.axisBottom(x).tickSizeOuter(0));
+
+  // Add Y axis
+  var y = d3.scaleLinear()
+    .domain([0, 1])
+    .range([ height, 0 ]);
+  svg.append("g")
+    .call(d3.axisLeft(y));
+
+  // color palette = one color per subgroup
+  var color = d3.scaleOrdinal()
+    .domain(subgroups1)
+    .range(['#8693C0','#858482','#04336B','#4E4C4D'])
+
+  //stack the data? --> stack per subgroup
+  var stackedData = d3.stack()
+    .keys(subgroups1)
+    (data2)
+  console.log(stackedData);
+
+  // Show the bars
+  svg.append("g")
+    .selectAll("g")
+    // Enter in the stack data = loop key per key = group per group
+    .data(stackedData)
+    .enter().append("g")
+      .attr("fill", function(d) { console.log(color(d.key)); return color(d.key); })
+      .selectAll("rect")
+      // enter a second time = loop subgroup per subgroup to add all rectangles
+      .data(function(d) { return d; })
+      .enter().append("rect")
+        .attr("x", function(d) {return x(d.data.year); })
+        .attr("y", function(d) { return y(d[1]); })
+        .attr("height", function(d) { return y(d[0]) - y(d[1]); })
+        .attr("width",x.bandwidth())
+
+
+  // text label for the x axis
+  svg.append("text")             
+      .attr("transform",
+            "translate(" + (width/2) + " ," + 
+                           (height + margin.top + 10) + ")")
+      .style("text-anchor", "middle")
+      .text("Year");
+
+
+
+  // text label for the y axis
+  svg.append("text")
+      .attr("transform", "rotate(-90)")
+      .attr("y", 0 - margin.left)
+      .attr("x",0 - (height / 2))
+      .attr("dy", "1em")
+      .style("text-anchor", "middle")
+      .text("Normalized Cumulative Share");      
+
+
+
+
+
+})
+
+
+
+
+</script>
